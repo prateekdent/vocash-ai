@@ -165,9 +165,6 @@ export function VoiceScreen(): React.JSX.Element {
     setSuccess(null);
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  const limitReached = usage ? usage.used >= usage.limit : false;
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -186,14 +183,10 @@ export function VoiceScreen(): React.JSX.Element {
               <Text style={styles.cardTitle}>Tap to record</Text>
               <Text style={styles.cardSub}>Speak your expense in Hindi or English</Text>
               <TouchableOpacity
-                style={[styles.micBtn, limitReached && styles.micBtnDisabled]}
-                onPress={startRecording}
-                disabled={limitReached}>
+                style={styles.micBtn}
+                onPress={startRecording}>
                 <Text style={styles.micIcon}>🎙️</Text>
               </TouchableOpacity>
-              {limitReached && (
-                <Text style={styles.limitText}>Daily limit reached. Try again tomorrow.</Text>
-              )}
             </>
           )}
 
@@ -352,10 +345,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   micBtnActive: { backgroundColor: '#e53935' },
-  micBtnDisabled: { backgroundColor: '#ccc', shadowOpacity: 0 },
   micIcon: { fontSize: 36 },
-
-  limitText: { fontSize: 13, color: '#e53935', textAlign: 'center' },
 
   partialText: {
     fontSize: 16,
