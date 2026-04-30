@@ -1,0 +1,39 @@
+# Dependencies
+**/node_modules/**
+**/.venv/**
+**/venv/**
+**/__pycache__/**
+
+# Build and generated artifacts
+**/build/**
+**/dist/**
+**/.expo/**
+**/.next/**
+**/*.tsbuildinfo
+**/coverage/**
+**/htmlcov/**
+
+# Logs and runtime dumps
+**/*.log
+**/logs/**
+**/.pytest_cache/**
+
+# OS/editor noise
+**/.DS_Store
+**/.idea/**
+**/.vscode/**
+
+# Secrets and env files
+**/.env
+**/.env.*
+!.env.example
+
+# Mobile generated
+**/android/app/build/**
+**/ios/build/**
+**/ios/Pods/**
+
+# Python packaging artifacts
+**/*.egg-info/**
+**/.mypy_cache/**
+**/.ruff_cache/**

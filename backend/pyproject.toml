@@ -1,0 +1,27 @@
+[project]
+name = "vocash-backend"
+version = "0.1.0"
+description = "Vocash FastAPI backend scaffolding"
+requires-python = ">=3.9"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn>=0.30.0",
+  "pydantic-settings>=2.4.0",
+  "python-dotenv>=1.0.1",
+  "motor>=3.6.0",
+  "pymongo>=4.8.0",
+  "python-jose[cryptography]>=3.3.0",
+  "passlib[bcrypt]>=1.7.4",
+  "bcrypt<4",
+  "openai>=1.40.0",
+  "email-validator>=2.2.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "httpx>=0.27.0"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
