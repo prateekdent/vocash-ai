@@ -1,20 +1,24 @@
+import Voice, {
+  SpeechErrorEvent,
+  SpeechResultsEvent,
+} from '@react-native-voice/voice';
 import React from 'react';
 import {
-  Button,
+  ActivityIndicator,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { apiClient } from '../../services/api/client';
 import { getApiErrorMessage } from '../../services/api/errors';
-import type {
-  ExpenseExtractResponse,
-  UsageTodayResponse,
-} from '../../types/api';
+import type { ExpenseExtractResponse, UsageTodayResponse } from '../../types/api';
 
-type VoiceState = 'idle' | 'recording' | 'transcript' | 'edit' | 'confirm';
+type VoiceState = 'idle' | 'recording' | 'transcript' | 'confirm';
+
 type ExtractedExpense = {
   amount: string;
   currency: string;
@@ -28,31 +32,47 @@ type ExtractedExpense = {
 export function VoiceScreen(): React.JSX.Element {
   const [voiceState, setVoiceState] = React.useState<VoiceState>('idle');
   const [transcript, setTranscript] = React.useState('');
-  const [extracted, setExtracted] = React.useState<ExtractedExpense | null>(
-    null
-  );
+  const [partialTranscript, setPartialTranscript] = React.useState('');
+  const [extracted, setExtracted] = React.useState<ExtractedExpense | null>(null);
   const [extractLoading, setExtractLoading] = React.useState(false);
   const [saveLoading, setSaveLoading] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(
-    null
-  );
+  const [error, setError] = React.useState<string | null>(null);
+  const [success, setSuccess] = React.useState<string | null>(null);
   const [usage, setUsage] = React.useState<UsageTodayResponse | null>(null);
-  const [usageLoading, setUsageLoading] = React.useState(true);
-  const [usageError, setUsageError] = React.useState<string | null>(null);
 
-  const mockTranscript = 'Aaj 500 ka petrol bhara';
+  // ── Voice event wiring ────────────────────────────────────────────────────
+  React.useEffect(() => {
+    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      const result = e.value?.[0] ?? '';
+      setTranscript(result);
+      setPartialTranscript('');
+    };
 
+    Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => {
+      setPartialTranscript(e.value?.[0] ?? '');
+    };
+
+    Voice.onSpeechEnd = () => {
+      setVoiceState('transcript');
+    };
+
+    Voice.onSpeechError = (e: SpeechErrorEvent) => {
+      setError(e.error?.message ?? 'Voice recognition error');
+      setVoiceState('idle');
+    };
+
+    return () => {
+      void Voice.destroy().then(() => Voice.removeAllListeners());
+    };
+  }, []);
+
+  // ── Usage ─────────────────────────────────────────────────────────────────
   const fetchUsage = React.useCallback(async (): Promise<void> => {
-    setUsageLoading(true);
-    setUsageError(null);
     try {
       const { data } = await apiClient.get<UsageTodayResponse>('/usage/today');
       setUsage(data);
-    } catch (error) {
-      setUsageError(getApiErrorMessage(error));
-    } finally {
-      setUsageLoading(false);
+    } catch {
+      // non-blocking
     }
   }, []);
 
@@ -60,43 +80,40 @@ export function VoiceScreen(): React.JSX.Element {
     void fetchUsage();
   }, [fetchUsage]);
 
-  const startRecording = (): void => {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setVoiceState('recording');
-  };
-
-  const stopRecording = (): void => {
-    setTranscript(mockTranscript);
-    setErrorMessage(null);
-    setVoiceState('transcript');
-  };
-
-  const resetFlow = (): void => {
+  // ── Actions ───────────────────────────────────────────────────────────────
+  const startRecording = async (): Promise<void> => {
+    setError(null);
+    setSuccess(null);
     setTranscript('');
-    setExtracted(null);
-    setExtractLoading(false);
-    setSaveLoading(false);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setVoiceState('idle');
+    setPartialTranscript('');
+    try {
+      await Voice.start('hi-IN'); // Hindi-India; falls back to English naturally
+      setVoiceState('recording');
+    } catch (e) {
+      setError(getApiErrorMessage(e));
+    }
+  };
+
+  const stopRecording = async (): Promise<void> => {
+    try {
+      await Voice.stop();
+    } catch (e) {
+      setError(getApiErrorMessage(e));
+    }
   };
 
   const extractExpense = async (): Promise<void> => {
-    if (!transcript.trim()) {
-      setErrorMessage('Transcript is required');
+    const text = transcript.trim();
+    if (!text) {
+      setError('No transcript to extract from');
       return;
     }
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    setError(null);
     setExtractLoading(true);
     try {
-      const { data } = await apiClient.post<ExpenseExtractResponse>(
-        '/expense/extract',
-        {
-          transcript: transcript.trim(),
-        }
-      );
+      const { data } = await apiClient.post<ExpenseExtractResponse>('/expense/extract', {
+        transcript: text,
+      });
       setExtracted({
         amount: String(data.amount ?? ''),
         currency: String(data.currency ?? 'INR'),
@@ -104,23 +121,19 @@ export function VoiceScreen(): React.JSX.Element {
         item: String(data.item ?? ''),
         expense_date: String(data.expense_date ?? ''),
         notes: String(data.notes ?? ''),
-        raw_transcript: String(data.raw_transcript ?? transcript.trim()),
+        raw_transcript: String(data.raw_transcript ?? text),
       });
       setVoiceState('confirm');
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+    } catch (e) {
+      setError(getApiErrorMessage(e));
     } finally {
       setExtractLoading(false);
     }
   };
 
   const saveExpense = async (): Promise<void> => {
-    if (!extracted) {
-      setErrorMessage('Nothing to save');
-      return;
-    }
-    setErrorMessage(null);
-    setSuccessMessage(null);
+    if (!extracted) return;
+    setError(null);
     setSaveLoading(true);
     try {
       await apiClient.post('/expense/save', {
@@ -131,180 +144,270 @@ export function VoiceScreen(): React.JSX.Element {
         expense_date: extracted.expense_date,
         notes: extracted.notes || null,
         source: 'voice',
-        raw_transcript: extracted.raw_transcript || transcript.trim(),
+        raw_transcript: extracted.raw_transcript,
       });
-      setSuccessMessage('Expense saved');
+      setSuccess('Expense saved!');
       await fetchUsage();
-      setTimeout(() => resetFlow(), 600);
-    } catch (error) {
-      setErrorMessage(getApiErrorMessage(error));
+      setTimeout(() => reset(), 800);
+    } catch (e) {
+      setError(getApiErrorMessage(e));
     } finally {
       setSaveLoading(false);
     }
   };
 
+  const reset = (): void => {
+    setVoiceState('idle');
+    setTranscript('');
+    setPartialTranscript('');
+    setExtracted(null);
+    setError(null);
+    setSuccess(null);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  const limitReached = usage ? usage.used >= usage.limit : false;
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Voice</Text>
-        <Text style={styles.subtitle}>State: {voiceState}</Text>
-        {usageLoading ? (
-          <Text style={styles.subtitle}>Loading usage...</Text>
-        ) : null}
-        {usageError ? (
-          <Text style={styles.error}>Usage: {usageError}</Text>
-        ) : null}
-        {usage ? (
-          <Text style={styles.helper}>
-            {usage.used}/{usage.limit} used today
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+
+        {/* Usage pill */}
+        <View style={styles.usagePill}>
+          <Text style={styles.usageText}>
+            {usage ? `${usage.used} / ${usage.limit} extractions today` : 'Loading usage...'}
           </Text>
-        ) : null}
-        <Button
-          title="Refresh Usage"
-          onPress={() => void fetchUsage()}
-          disabled={usageLoading}
-        />
-        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-        {successMessage ? (
-          <Text style={styles.success}>{successMessage}</Text>
-        ) : null}
+        </View>
 
-        {voiceState === 'idle' && (
-          <Button title="Start Recording" onPress={startRecording} />
-        )}
+        {/* Main mic card */}
+        <View style={styles.card}>
+          {voiceState === 'idle' && (
+            <>
+              <Text style={styles.cardTitle}>Tap to record</Text>
+              <Text style={styles.cardSub}>Speak your expense in Hindi or English</Text>
+              <TouchableOpacity
+                style={[styles.micBtn, limitReached && styles.micBtnDisabled]}
+                onPress={startRecording}
+                disabled={limitReached}>
+                <Text style={styles.micIcon}>🎙️</Text>
+              </TouchableOpacity>
+              {limitReached && (
+                <Text style={styles.limitText}>Daily limit reached. Try again tomorrow.</Text>
+              )}
+            </>
+          )}
 
-        {voiceState === 'recording' && (
-          <>
-            <Text style={styles.helper}>Recording... (mock)</Text>
-            <Button title="Stop Recording" onPress={stopRecording} />
-          </>
-        )}
+          {voiceState === 'recording' && (
+            <>
+              <Text style={styles.cardTitle}>Listening...</Text>
+              <Text style={styles.partialText}>
+                {partialTranscript || 'Speak now'}
+              </Text>
+              <TouchableOpacity style={[styles.micBtn, styles.micBtnActive]} onPress={stopRecording}>
+                <Text style={styles.micIcon}>⏹️</Text>
+              </TouchableOpacity>
+              <Text style={styles.cardSub}>Tap to stop</Text>
+            </>
+          )}
 
-        {voiceState === 'transcript' && (
-          <>
-            <Text style={styles.transcript}>{transcript}</Text>
-            <Button
-              title="Edit Transcript"
-              onPress={() => setVoiceState('edit')}
-            />
-            <Button
-              title={extractLoading ? 'Extracting...' : 'Extract Expense'}
-              onPress={extractExpense}
-              disabled={extractLoading}
-            />
-            <Button title="Reset" onPress={resetFlow} />
-          </>
-        )}
+          {voiceState === 'transcript' && (
+            <>
+              <Text style={styles.cardTitle}>Got it — review</Text>
+              <TextInput
+                style={styles.transcriptInput}
+                value={transcript}
+                onChangeText={setTranscript}
+                multiline
+                placeholder="Edit transcript if needed..."
+              />
+              <View style={styles.rowBtns}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={reset}>
+                  <Text style={styles.secondaryBtnText}>Redo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, extractLoading && styles.btnDisabled]}
+                  onPress={extractExpense}
+                  disabled={extractLoading}>
+                  {extractLoading
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.primaryBtnText}>Extract →</Text>}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
 
-        {voiceState === 'edit' && (
-          <>
-            <TextInput
-              style={styles.input}
-              value={transcript}
-              onChangeText={setTranscript}
-              multiline
-            />
-            <Button
-              title={extractLoading ? 'Extracting...' : 'Save Edit & Extract'}
-              onPress={extractExpense}
-              disabled={extractLoading}
-            />
-            <Button
-              title="Cancel Edit"
-              onPress={() => setVoiceState('transcript')}
-            />
-          </>
-        )}
+          {voiceState === 'confirm' && extracted && (
+            <>
+              <Text style={styles.cardTitle}>Confirm expense</Text>
 
-        {voiceState === 'confirm' && extracted && (
-          <>
-            <Text style={styles.helper}>Confirm extracted data:</Text>
-            <TextInput
-              style={styles.input}
-              value={extracted.amount}
-              onChangeText={(value) =>
-                setExtracted((prev) =>
-                  prev ? { ...prev, amount: value } : prev
-                )
-              }
-              placeholder="Amount"
-              keyboardType="numeric"
-            />
-            <TextInput
-              style={styles.input}
-              value={extracted.category}
-              onChangeText={(value) =>
-                setExtracted((prev) =>
-                  prev ? { ...prev, category: value } : prev
-                )
-              }
-              placeholder="Category"
-            />
-            <TextInput
-              style={styles.input}
-              value={extracted.item}
-              onChangeText={(value) =>
-                setExtracted((prev) => (prev ? { ...prev, item: value } : prev))
-              }
-              placeholder="Item"
-            />
-            <TextInput
-              style={styles.input}
-              value={extracted.expense_date}
-              onChangeText={(value) =>
-                setExtracted((prev) =>
-                  prev ? { ...prev, expense_date: value } : prev
-                )
-              }
-              placeholder="YYYY-MM-DD"
-            />
-            <TextInput
-              style={styles.input}
-              value={extracted.notes}
-              onChangeText={(value) =>
-                setExtracted((prev) =>
-                  prev ? { ...prev, notes: value } : prev
-                )
-              }
-              placeholder="Notes (optional)"
-            />
-            <Button
-              title={saveLoading ? 'Saving...' : 'Confirm & Save'}
-              onPress={saveExpense}
-              disabled={saveLoading}
-            />
-            <Button
-              title="Back to Edit Transcript"
-              onPress={() => setVoiceState('edit')}
-            />
-            <Button title="Reset" onPress={resetFlow} />
-          </>
-        )}
-      </View>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Amount (₹)</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={extracted.amount}
+                  onChangeText={v => setExtracted(p => p ? { ...p, amount: v } : p)}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Item</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={extracted.item}
+                  onChangeText={v => setExtracted(p => p ? { ...p, item: v } : p)}
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Category</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={extracted.category}
+                  onChangeText={v => setExtracted(p => p ? { ...p, category: v } : p)}
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Date</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={extracted.expense_date}
+                  onChangeText={v => setExtracted(p => p ? { ...p, expense_date: v } : p)}
+                  placeholder="YYYY-MM-DD"
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Notes</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={extracted.notes}
+                  onChangeText={v => setExtracted(p => p ? { ...p, notes: v } : p)}
+                  placeholder="Optional"
+                />
+              </View>
+
+              <View style={styles.rowBtns}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={reset}>
+                  <Text style={styles.secondaryBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, saveLoading && styles.btnDisabled]}
+                  onPress={saveExpense}
+                  disabled={saveLoading}>
+                  {saveLoading
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.primaryBtnText}>Save ✓</Text>}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* Feedback messages */}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {success ? <Text style={styles.successText}>{success}</Text> : null}
+
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  container: {
-    flex: 1,
+  safeArea: { flex: 1, backgroundColor: '#F7F8FC' },
+  scroll: { padding: 16, gap: 16, alignItems: 'center' },
+
+  usagePill: {
+    backgroundColor: '#F0EEFF',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
+  usageText: { fontSize: 13, color: '#6C63FF', fontWeight: '600' },
+
+  card: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    gap: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A2E' },
+  cardSub: { fontSize: 13, color: '#888', textAlign: 'center' },
+
+  micBtn: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#6C63FF',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    gap: 10,
+    shadowColor: '#6C63FF',
+    shadowOpacity: 0.4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 6,
   },
-  title: { fontSize: 24, fontWeight: '600' },
-  subtitle: { fontSize: 14, color: '#666' },
-  helper: { fontSize: 14 },
-  transcript: { fontSize: 16, paddingVertical: 8 },
-  error: { color: '#b71c1c', fontSize: 13 },
-  success: { color: '#1b5e20', fontSize: 13 },
-  input: {
+  micBtnActive: { backgroundColor: '#e53935' },
+  micBtnDisabled: { backgroundColor: '#ccc', shadowOpacity: 0 },
+  micIcon: { fontSize: 36 },
+
+  limitText: { fontSize: 13, color: '#e53935', textAlign: 'center' },
+
+  partialText: {
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    minHeight: 48,
+  },
+
+  transcriptInput: {
+    width: '100%',
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
     minHeight: 80,
-    padding: 10,
     textAlignVertical: 'top',
+    color: '#1A1A2E',
   },
+
+  field: { width: '100%', gap: 4 },
+  fieldLabel: { fontSize: 12, color: '#888', fontWeight: '600', textTransform: 'uppercase' },
+  fieldInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#1A1A2E',
+  },
+
+  rowBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+  primaryBtn: {
+    flex: 1,
+    backgroundColor: '#6C63FF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  secondaryBtn: {
+    flex: 1,
+    backgroundColor: '#F0F0F5',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  secondaryBtnText: { color: '#555', fontWeight: '600', fontSize: 15 },
+  btnDisabled: { opacity: 0.6 },
+
+  error: { color: '#e53935', fontSize: 13, textAlign: 'center' },
+  successText: { color: '#2e7d32', fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });
