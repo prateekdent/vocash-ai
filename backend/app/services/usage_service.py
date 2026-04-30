@@ -29,6 +29,8 @@ class UsageService:
 
     async def enforce_limit_then_increment(self, usage_repo, user_id: str, is_pro: bool) -> UsageStatus:
         status = await self.get_today(usage_repo=usage_repo, user_id=user_id, is_pro=is_pro)
+        if self.settings.disable_extraction_limit:
+            return status
         if not is_pro and status.used >= status.limit:
             raise ValueError("LIMIT_REACHED")
         if not is_pro:

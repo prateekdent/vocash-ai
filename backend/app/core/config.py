@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     free_daily_extraction_limit: int = 3
     default_timezone: str = "Asia/Kolkata"
+    disable_extraction_limit: bool = False  # set to true in Railway vars during testing
 
     @field_validator("jwt_secret")
     @classmethod
