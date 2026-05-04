@@ -1,21 +1,29 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { monthLabel } from '../../utils/date';
 
 type Props = {
   date: Date;
   onNavigate: (dir: -1 | 1) => void;
+  /** When provided, the month pill becomes a Pressable (e.g. to open a date picker). */
+  onPillPress?: () => void;
 };
 
-export function MonthNavigator({ date, onNavigate }: Props): React.JSX.Element {
+export function MonthNavigator({ date, onNavigate, onPillPress }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={() => onNavigate(-1)} style={styles.btn}>
         <Text style={styles.arrow}>‹</Text>
       </TouchableOpacity>
-      <View style={styles.pill}>
-        <Text style={styles.pillText}>📅  {monthLabel(date)}</Text>
-      </View>
+      {onPillPress ? (
+        <Pressable onPress={onPillPress} style={styles.pill}>
+          <Text style={styles.pillText}>📅  {monthLabel(date)}</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>📅  {monthLabel(date)}</Text>
+        </View>
+      )}
       <TouchableOpacity onPress={() => onNavigate(1)} style={styles.btn}>
         <Text style={styles.arrow}>›</Text>
       </TouchableOpacity>
