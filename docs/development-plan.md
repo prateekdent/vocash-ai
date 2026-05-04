@@ -40,7 +40,12 @@ Sequence:
 1. Transactions screen redesign — rows, filters, edit modal. - Completed (2026-05-04)
    - Modular component structure (TransactionRow, CategoryChips, MonthNavigator, EditTransactionModal, categoryColors, filterConstants, date utils).
    - Colored category dots, month navigation, fixed chip filter list, bottom-sheet edit modal.
-2. Dashboard charts and category summaries. - Next
+2. Dashboard / Stats screen redesign. - Completed (2026-05-04)
+   - Extracted DashboardScreen.styles.ts; screen is orchestration-only.
+   - DashboardSummaryHeader (hero spend block), SpendingProportionBar (multi-color segment bar + legend).
+   - CategoryBreakdownRow (dot + name + micro bar + percent + amount).
+   - RecentTransactionRow (clean read-only row).
+   - MonthNavigator reused with optional onPillPress; top-5 + Others rollup logic.
 3. Category normalization at extraction time (backend prompt update). - Pending
 4. Search and category drill-down. - Pending
 5. Budget UI (connects to existing `/budget/set` and `/budget/status`). - Pending

@@ -57,8 +57,30 @@
 - `KeyboardAvoidingView` with `Platform.OS` branch keeps fields usable when keyboard opens.
 - Drag handle, title, validation, save/cancel preserved.
 
+---
+
+## 2026-05-04 (continued)
+
+### Completed — Dashboard / Stats Screen Redesign (Phase 3)
+
+**New component structure (`src/components/dashboard/`):**
+- `DashboardSummaryHeader.tsx` — hero block: "Total Spend" label, large amount (₹ X,XXX formatted `en-IN`), month + category count subtitle.
+- `SpendingProportionBar.tsx` — flex-based multi-color horizontal bar (proportional segments) + compact dot-label legend. Returns `null` when data is empty.
+- `CategoryBreakdownRow.tsx` — colored dot + category name + micro 4px progress bar + muted percent + bold amount. Colors from shared `getCategoryColor`.
+- `RecentTransactionRow.tsx` — read-only row: bold item name, muted date, dark bold amount. Suppresses bottom border on last item.
+
+**Screen refactor (`DashboardScreen.tsx`):**
+- `StyleSheet` extracted to `DashboardScreen.styles.ts`.
+- Screen is now orchestration-only: state management, data fetching, `buildBreakdown()` (top-5 by amount + Others rollup), picker open/confirm/cancel.
+- `MonthNavigator` reused from Transactions (backward-compatible; optional `onPillPress` prop added to enable the date-picker tap).
+- `DashboardSummaryHeader` + `SpendingProportionBar` wrapped in a `heroBlock` View to form a seamless white zone (eliminates gray scroll gap between them).
+- Section cards (`gap: 8`) give tighter row rhythm without crowding.
+
+**ScrollView fix:**
+- Added `style={{ flex: 1 }}` (`scrollView` style) to the `ScrollView` so it is properly height-constrained and scrolling works.
+
 ### Open Items
 - Category normalization: AI extracts free-text categories (`groceries`, `petrol`) that do not match chip labels (`Food`, `Transport`). Fix: normalize at extraction time in the backend prompt — tracked as a separate future slice.
-- Dashboard charts and category summaries (Phase 3, next).
 - Search and category drill-down (Phase 3).
 - Budget UI (connects to existing backend endpoints).
+- Phase 4: Razorpay upgrade UX, limit-hit paywall, App Store submission.
