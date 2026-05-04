@@ -10,6 +10,40 @@ from pydantic import BaseModel, Field, ValidationError
 from app.core.config import Settings
 from app.schemas.expense import ExtractResponse
 
+# Single source of truth for allowed categories.
+# Must stay in sync with mobile filterConstants.ts.
+ALLOWED_CATEGORIES: frozenset[str] = frozenset({
+    "Food",
+    "Transport",
+    "Shopping",
+    "Bills & Utilities",
+    "Health",
+    "Entertainment",
+    "Education",
+    "Savings & Investment",
+    "Family & Personal",
+    "Other",
+})
+
+# Ordered for inclusion in the prompt (Other always last).
+_CATEGORY_PROMPT_LIST = (
+    "Food, Transport, Shopping, Bills & Utilities, Health, "
+    "Entertainment, Education, Savings & Investment, Family & Personal, Other"
+)
+
+
+def _normalize_category(raw: str) -> str:
+    """Map an AI-returned category string to the nearest allowed value.
+
+    Performs a case-insensitive exact match against ALLOWED_CATEGORIES.
+    Returns "Other" if no match is found — never raises.
+    """
+    candidate = raw.strip()
+    for allowed in ALLOWED_CATEGORIES:
+        if candidate.lower() == allowed.lower():
+            return allowed
+    return "Other"
+
 
 class _ExtractedPayload(BaseModel):
     amount: Decimal = Field(gt=0)
@@ -35,7 +69,7 @@ class ExtractionService:
         return ExtractResponse(
             amount=parsed.amount,
             currency="INR",
-            category=parsed.category,
+            category=_normalize_category(parsed.category),
             item=parsed.item,
             expense_date=parsed.expense_date,
             notes=parsed.notes,
@@ -49,6 +83,8 @@ class ExtractionService:
             "Extract expense fields from Hindi/English input and return strict JSON with keys: "
             "amount, category, item, expense_date, notes. "
             "Use YYYY-MM-DD for expense_date. If the input says 'aaj' or 'today', use today's date. "
+            f"category MUST be exactly one of: {_CATEGORY_PROMPT_LIST}. "
+            "Pick the closest match; use \"Other\" if nothing fits clearly. "
             "No markdown, no extra keys."
         )
         response = await self.client.responses.create(
