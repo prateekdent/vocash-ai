@@ -55,12 +55,16 @@ function lastDay(date: Date): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+function Separator(): React.JSX.Element {
+  return <View style={styles.separator} />;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export function TransactionsScreen(): React.JSX.Element {
   const today = new Date();
 
   // ── Filter state ────────────────────────────────────────────────────────────
-  const [selectedDate, setSelectedDate] = React.useState(today);
+  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null); // null = all time
   const [pickerVisible, setPickerVisible] = React.useState(false);
   const [tempDate, setTempDate] = React.useState(today);
   const [activeCategory, setActiveCategory] = React.useState('All');
@@ -84,22 +88,20 @@ export function TransactionsScreen(): React.JSX.Element {
   const [editError, setEditError] = React.useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = React.useState<string | null>(null);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────────
+  // ── Fetch (date filter only — category is client-side) ────────────────────────
   const fetchTransactions = React.useCallback(
-    async (targetPage: number, replace: boolean, date?: Date, cat?: string): Promise<void> => {
-      const forDate = date ?? selectedDate;
-      const forCat = cat ?? activeCategory;
+    async (targetPage: number, replace: boolean, date?: Date | null): Promise<void> => {
+      const forDate = date !== undefined ? date : selectedDate;
       replace ? setIsLoading(true) : setIsLoadingMore(true);
       setError(null);
       try {
         const params: Record<string, string | number> = {
           page: targetPage,
           page_size: PAGE_SIZE,
-          from_date: firstDay(forDate),
-          to_date: lastDay(forDate),
         };
-        if (forCat !== 'All') {
-          params.category = forCat;
+        if (forDate) {
+          params.from_date = firstDay(forDate);
+          params.to_date = lastDay(forDate);
         }
         const { data } = await apiClient.get<ExpenseListResponse>('/expense/list', { params });
         setPage(data.pagination.page);
@@ -112,7 +114,7 @@ export function TransactionsScreen(): React.JSX.Element {
         setIsLoadingMore(false);
       }
     },
-    [selectedDate, activeCategory]
+    [selectedDate]
   );
 
   React.useEffect(() => {
@@ -122,7 +124,7 @@ export function TransactionsScreen(): React.JSX.Element {
 
   // ── Month picker ─────────────────────────────────────────────────────────────
   const openPicker = (): void => {
-    setTempDate(selectedDate);
+    setTempDate(selectedDate ?? today);
     setPickerVisible(true);
   };
 
@@ -130,30 +132,43 @@ export function TransactionsScreen(): React.JSX.Element {
     setSelectedDate(tempDate);
     setActiveCategory('All');
     setPickerVisible(false);
-    void fetchTransactions(1, true, tempDate, 'All');
+    void fetchTransactions(1, true, tempDate);
   };
 
   const cancelPicker = (): void => setPickerVisible(false);
 
+  const clearMonthFilter = (): void => {
+    setSelectedDate(null);
+    setActiveCategory('All');
+    void fetchTransactions(1, true, null);
+  };
+
   const navigateMonth = (dir: -1 | 1): void => {
-    const next = new Date(selectedDate);
+    const base = selectedDate ?? today;
+    const next = new Date(base);
     next.setMonth(next.getMonth() + dir);
     setSelectedDate(next);
     setActiveCategory('All');
-    void fetchTransactions(1, true, next, 'All');
+    void fetchTransactions(1, true, next);
   };
 
-  // ── Category chip ────────────────────────────────────────────────────────────
+  // ── Category chip (client-side filter on loaded data) ─────────────────────────
   const selectCategory = (cat: string): void => {
     setActiveCategory(cat);
-    void fetchTransactions(1, true, selectedDate, cat);
   };
+
+  const displayedTransactions = React.useMemo(() => {
+    if (activeCategory === 'All') { return transactions; }
+    return transactions.filter(
+      t => t.category.toLowerCase() === activeCategory.toLowerCase()
+    );
+  }, [transactions, activeCategory]);
 
   // ── Load more ────────────────────────────────────────────────────────────────
   const canLoadMore = transactions.length < total;
 
   const onLoadMore = (): void => {
-    if (!canLoadMore || isLoadingMore) return;
+    if (!canLoadMore || isLoadingMore) { return; }
     void fetchTransactions(page + 1, false);
   };
 
@@ -175,7 +190,7 @@ export function TransactionsScreen(): React.JSX.Element {
   };
 
   const saveEdit = async (): Promise<void> => {
-    if (!editingItem) return;
+    if (!editingItem) { return; }
     if (!editAmount.trim() || !editCategory.trim() || !editItem.trim() || !editDate.trim()) {
       setEditError('All fields are required');
       return;
@@ -246,7 +261,7 @@ export function TransactionsScreen(): React.JSX.Element {
         <View style={styles.rowRight}>
           <Text style={styles.rowAmount}>₹ {item.amount}</Text>
           {isDeleting ? (
-            <ActivityIndicator size="small" color="#6C63FF" style={{ marginTop: 4 }} />
+            <ActivityIndicator size="small" color="#6C63FF" style={styles.deletingIndicator} />
           ) : (
             <TouchableOpacity
               onPress={() => confirmDelete(item)}
@@ -265,21 +280,39 @@ export function TransactionsScreen(): React.JSX.Element {
 
       {/* Month navigator */}
       <View style={styles.monthNav}>
-        <TouchableOpacity onPress={() => navigateMonth(-1)} style={styles.navBtn}>
-          <Text style={styles.navArrow}>‹</Text>
+        <TouchableOpacity
+          onPress={() => navigateMonth(-1)}
+          style={styles.navBtn}
+          disabled={!selectedDate}>
+          <Text style={[styles.navArrow, !selectedDate && styles.navArrowDisabled]}>‹</Text>
         </TouchableOpacity>
         <Pressable onPress={openPicker} style={styles.monthPill}>
-          <Text style={styles.monthPillText}>📅  {monthLabel(selectedDate)}</Text>
+          <Text style={styles.monthPillText}>
+            {selectedDate ? `📅  ${monthLabel(selectedDate)}` : '📋  All Time'}
+          </Text>
         </Pressable>
-        <TouchableOpacity onPress={() => navigateMonth(1)} style={styles.navBtn}>
-          <Text style={styles.navArrow}>›</Text>
+        <TouchableOpacity
+          onPress={selectedDate ? () => navigateMonth(1) : undefined}
+          style={styles.navBtn}>
+          {selectedDate ? (
+            <Text style={styles.navArrow}>›</Text>
+          ) : (
+            <View style={styles.navPlaceholder} />
+          )}
         </TouchableOpacity>
       </View>
+
+      {/* Active month filter badge */}
+      {selectedDate ? (
+        <TouchableOpacity style={styles.clearFilter} onPress={clearMonthFilter}>
+          <Text style={styles.clearFilterText}>✕  Clear month filter</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Summary strip */}
       <View style={styles.summaryStrip}>
         <Text style={styles.summaryText}>
-          {isLoading ? '—' : `${total} transaction${total !== 1 ? 's' : ''}`}
+          {isLoading ? '—' : `${total} transaction${total !== 1 ? 's' : ''}${activeCategory !== 'All' ? ` · filtered by ${activeCategory}` : ''}`}
         </Text>
       </View>
 
@@ -319,22 +352,28 @@ export function TransactionsScreen(): React.JSX.Element {
             <Text style={styles.retryBtnText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      ) : transactions.length === 0 ? (
+      ) : displayedTransactions.length === 0 ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyText}>No transactions found</Text>
+          <Text style={styles.emptyText}>
+            {activeCategory !== 'All'
+              ? `No "${activeCategory}" transactions found`
+              : selectedDate
+              ? `No transactions in ${monthLabel(selectedDate)}`
+              : 'No transactions yet'}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={transactions}
+          data={displayedTransactions}
           keyExtractor={item => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ItemSeparatorComponent={Separator}
           onEndReached={onLoadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={
             isLoadingMore ? (
-              <ActivityIndicator color="#6C63FF" style={{ paddingVertical: 16 }} />
+              <ActivityIndicator color="#6C63FF" style={styles.loadMoreIndicator} />
             ) : !canLoadMore && transactions.length > 0 ? (
               <Text style={styles.endText}>End of list</Text>
             ) : null
@@ -356,7 +395,7 @@ export function TransactionsScreen(): React.JSX.Element {
               mode="date"
               display="spinner"
               onChange={(event, date) => {
-                if (event.type === 'set' && date) setTempDate(date);
+                if (event.type === 'set' && date) { setTempDate(date); }
               }}
             />
             <View style={styles.modalActions}>
@@ -380,7 +419,7 @@ export function TransactionsScreen(): React.JSX.Element {
         <Pressable style={styles.modalBackdrop} onPress={closeEdit}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ width: '100%' }}>
+            style={styles.keyboardAvoiding}>
             <Pressable style={styles.editCard} onPress={() => {}}>
               <View style={styles.editHandle} />
               <Text style={styles.editTitle}>Edit Transaction</Text>
@@ -468,6 +507,16 @@ const styles = StyleSheet.create({
   },
   navBtn: { padding: 8 },
   navArrow: { fontSize: 28, color: '#6C63FF', fontWeight: '300' },
+  navArrowDisabled: { color: '#ccc' },
+  clearFilter: {
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#FFF0F0',
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  clearFilterText: { fontSize: 12, color: '#b71c1c', fontWeight: '500' },
   monthPill: {
     flex: 1,
     alignItems: 'center',
@@ -520,6 +569,10 @@ const styles = StyleSheet.create({
   // List
   listContent: { paddingBottom: 32 },
   separator: { height: 1, backgroundColor: '#F0F0F5', marginHorizontal: 16 },
+  loadMoreIndicator: { paddingVertical: 16 },
+  deletingIndicator: { marginTop: 4 },
+  navPlaceholder: { width: 28 },
+  keyboardAvoiding: { width: '100%' },
 
   // Row
   row: {
