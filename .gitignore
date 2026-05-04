@@ -41,6 +41,7 @@ apps/mobile/android/.gradle/
 
 # ── Generated / tooling ───────────────────────────────────────────────────────
 graphify-out/
+reference/
 *.log
 logs/
 .DS_Store
