@@ -21,24 +21,29 @@ Status:
 9. Budget endpoints (`/budget/set`, `/budget/status`) with Pro gating. - Completed
 10. Payment verification endpoint (`/payment/verify`) with signature check + Pro activation. - Completed
 
-## Phase 2 - Mobile Core (In Progress)
+## Phase 2 - Mobile Core (Completed)
 Goal: End-to-end user loop from login to saved expense.
 Sequence:
 1. RN app bootstrap with navigation and state. - Completed
 2. Auth screens and token lifecycle. - Completed
-3. Voice capture + transcript UI. - Completed (mock recording state, API-wired extract/save)
+3. Voice capture + transcript UI. - Completed (real device voice via `@react-native-voice/voice`, manual fallback for simulator)
 4. Extract/confirm/save flow. - Completed
 5. Transactions list and edit/delete. - Completed
 6. Usage limit UI and graceful failures. - Completed
-7. Dashboard summary rendering (simple list-based UI). - Completed
+7. Dashboard summary rendering (month navigator + category breakdown + recent list). - Completed
 8. Centralized API error/session handling and stabilization. - Completed
+9. Backend deployed to Railway; app tested on physical iPhone. - Completed
 
-## Phase 3 - Analytics (Week 5)
+## Phase 3 - Analytics (In Progress)
 Goal: Better spending visibility and retention drivers.
 Sequence:
-1. Dashboard charts and category summaries.
-2. Date range filters and recent list improvements.
-3. Search and category drill-down.
+1. Transactions screen redesign — rows, filters, edit modal. - Completed (2026-05-04)
+   - Modular component structure (TransactionRow, CategoryChips, MonthNavigator, EditTransactionModal, categoryColors, filterConstants, date utils).
+   - Colored category dots, month navigation, fixed chip filter list, bottom-sheet edit modal.
+2. Dashboard charts and category summaries. - Next
+3. Category normalization at extraction time (backend prompt update). - Pending
+4. Search and category drill-down. - Pending
+5. Budget UI (connects to existing `/budget/set` and `/budget/status`). - Pending
 
 ## Phase 4 - Monetization & Release (Week 6)
 Goal: Paid conversion and store readiness.
