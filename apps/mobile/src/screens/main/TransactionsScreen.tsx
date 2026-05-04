@@ -355,7 +355,9 @@ export function TransactionsScreen(): React.JSX.Element {
               value={tempDate}
               mode="date"
               display="spinner"
-              onChange={(_e, date) => { if (date) setTempDate(date); }}
+              onChange={(event, date) => {
+                if (event.type === 'set' && date) setTempDate(date);
+              }}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={cancelPicker} style={[styles.modalBtn, styles.cancelBtn]}>
