@@ -14,6 +14,7 @@ import {
   EditTransactionModal,
   type EditFormValues,
 } from '../../components/transactions/EditTransactionModal';
+import { TRANSACTION_CATEGORIES } from '../../components/transactions/filterConstants';
 import { MonthNavigator } from '../../components/transactions/MonthNavigator';
 import { TransactionRow } from '../../components/transactions/TransactionRow';
 import { apiClient } from '../../services/api/client';
@@ -87,12 +88,7 @@ export function TransactionsScreen(): React.JSX.Element {
     void fetchTransactions(1, true, next);
   };
 
-  // ── Category chips (client-side filter) ──────────────────────────────────────
-  const categories = React.useMemo(() => {
-    const unique = Array.from(new Set(transactions.map(t => t.category))).sort();
-    return ['All', ...unique];
-  }, [transactions]);
-
+  // ── Category chips (client-side filter against fixed list) ───────────────────
   const displayedTransactions = React.useMemo(() => {
     if (activeCategory === 'All') { return transactions; }
     return transactions.filter(
@@ -195,15 +191,10 @@ export function TransactionsScreen(): React.JSX.Element {
       </View>
 
       <CategoryChips
-        categories={categories}
+        categories={TRANSACTION_CATEGORIES}
         active={activeCategory}
         onSelect={setActiveCategory}
       />
-
-      <View style={styles.colHeader}>
-        <Text style={styles.colHeaderText}>Note</Text>
-        <Text style={styles.colHeaderText}>Amount</Text>
-      </View>
 
       {isLoading ? (
         <View style={styles.centered}>

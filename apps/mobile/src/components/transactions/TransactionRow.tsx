@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import type { ExpenseListItem } from '../../types/api';
+import { getCategoryColor } from './categoryColors';
 
 type Props = {
   item: ExpenseListItem;
@@ -21,24 +22,34 @@ export function TransactionRow({
   onPress,
   onDelete,
 }: Props): React.JSX.Element {
+  const dotColor = getCategoryColor(item.category);
+
   return (
     <TouchableOpacity
       style={styles.row}
       onPress={() => onPress(item)}
-      activeOpacity={0.7}
+      activeOpacity={0.6}
       disabled={isDeleting}>
+      {/* Category accent dot — color is dynamic, eslint-disable is intentional */}
+      {/* eslint-disable-next-line react-native/no-inline-styles */}
+      <View style={[styles.dot, { backgroundColor: dotColor }]} />
+
       <View style={styles.left}>
         <Text style={styles.name} numberOfLines={1}>{item.item}</Text>
-        <Text style={styles.meta}>{item.category}  ·  {item.expense_date}</Text>
+        <Text style={styles.meta} numberOfLines={1}>
+          {item.category} · {item.expense_date}
+        </Text>
       </View>
+
       <View style={styles.right}>
         <Text style={styles.amount}>₹ {item.amount}</Text>
         {isDeleting ? (
-          <ActivityIndicator size="small" color="#6C63FF" style={styles.spinner} />
+          <ActivityIndicator size="small" color="#C0C0CC" style={styles.spinner} />
         ) : (
           <TouchableOpacity
             onPress={() => onDelete(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            style={styles.deleteBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={styles.deleteIcon}>🗑</Text>
           </TouchableOpacity>
         )}
@@ -50,17 +61,49 @@ export function TransactionRow({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 15,
     backgroundColor: '#fff',
   },
-  left: { flex: 1, marginRight: 12 },
-  name: { fontSize: 15, fontWeight: '600', color: '#1A1A2E', marginBottom: 3 },
-  meta: { fontSize: 12, color: '#999' },
-  right: { alignItems: 'flex-end', gap: 4 },
-  amount: { fontSize: 15, fontWeight: '700', color: '#6C63FF' },
-  deleteIcon: { fontSize: 14, opacity: 0.4 },
-  spinner: { marginTop: 4 },
+
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 13,
+    marginTop: 1,
+    flexShrink: 0,
+  },
+
+  left: {
+    flex: 1,
+    gap: 4,
+  },
+  name: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A2E',
+    letterSpacing: -0.1,
+  },
+  meta: {
+    fontSize: 12,
+    color: '#ADADB8',
+    fontWeight: '400',
+  },
+
+  right: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+    gap: 5,
+  },
+  amount: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    letterSpacing: -0.3,
+  },
+  deleteBtn: { opacity: 0.28 },
+  deleteIcon: { fontSize: 13 },
+  spinner: { marginTop: 2 },
 });
