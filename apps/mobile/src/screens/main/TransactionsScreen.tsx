@@ -1,72 +1,35 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
 import React from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { CategoryChips } from '../../components/transactions/CategoryChips';
+import {
+  EditTransactionModal,
+  type EditFormValues,
+} from '../../components/transactions/EditTransactionModal';
+import { MonthNavigator } from '../../components/transactions/MonthNavigator';
+import { TransactionRow } from '../../components/transactions/TransactionRow';
 import { apiClient } from '../../services/api/client';
 import { getApiErrorMessage } from '../../services/api/errors';
 import type { ExpenseListItem, ExpenseListResponse } from '../../types/api';
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-const CATEGORIES = [
-  'All',
-  'Food',
-  'Transport',
-  'Shopping',
-  'Bills & Utilities',
-  'Health',
-  'Entertainment',
-  'Education',
-  'Savings & Investment',
-  'Family & Personal',
-  'Other',
-];
+import { firstDay, lastDay, monthLabel } from '../../utils/date';
 
 const PAGE_SIZE = 20;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function monthLabel(date: Date): string {
-  return date.toLocaleString('default', { month: 'long', year: 'numeric' });
-}
-
-function firstDay(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}-01`;
-}
-
-function lastDay(date: Date): string {
-  const y = date.getFullYear();
-  const m = date.getMonth() + 1;
-  const d = new Date(y, m, 0).getDate();
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
 
 function Separator(): React.JSX.Element {
   return <View style={styles.separator} />;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export function TransactionsScreen(): React.JSX.Element {
-  const today = new Date();
-
   // ── Filter state ────────────────────────────────────────────────────────────
-  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null); // null = all time
-  const [pickerVisible, setPickerVisible] = React.useState(false);
-  const [tempDate, setTempDate] = React.useState(today);
+  const [selectedDate, setSelectedDate] = React.useState<Date>(new Date());
   const [activeCategory, setActiveCategory] = React.useState('All');
 
   // ── List state ──────────────────────────────────────────────────────────────
@@ -76,33 +39,26 @@ export function TransactionsScreen(): React.JSX.Element {
   const [error, setError] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(1);
   const [total, setTotal] = React.useState(0);
-
-  // ── Edit modal state ────────────────────────────────────────────────────────
-  const [editModalVisible, setEditModalVisible] = React.useState(false);
-  const [editingItem, setEditingItem] = React.useState<ExpenseListItem | null>(null);
-  const [editAmount, setEditAmount] = React.useState('');
-  const [editCategory, setEditCategory] = React.useState('');
-  const [editItem, setEditItem] = React.useState('');
-  const [editDate, setEditDate] = React.useState('');
-  const [editLoading, setEditLoading] = React.useState(false);
-  const [editError, setEditError] = React.useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = React.useState<string | null>(null);
 
-  // ── Fetch (date filter only — category is client-side) ────────────────────────
+  // ── Edit modal state ────────────────────────────────────────────────────────
+  const [editingItem, setEditingItem] = React.useState<ExpenseListItem | null>(null);
+  const [editSaving, setEditSaving] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
+
+  // ── Data fetching ─────────────────────────────────────────────────────────────
   const fetchTransactions = React.useCallback(
-    async (targetPage: number, replace: boolean, date?: Date | null): Promise<void> => {
-      const forDate = date !== undefined ? date : selectedDate;
+    async (targetPage: number, replace: boolean, date?: Date): Promise<void> => {
+      const forDate = date ?? selectedDate;
       replace ? setIsLoading(true) : setIsLoadingMore(true);
       setError(null);
       try {
         const params: Record<string, string | number> = {
           page: targetPage,
           page_size: PAGE_SIZE,
+          from_date: firstDay(forDate),
+          to_date: lastDay(forDate),
         };
-        if (forDate) {
-          params.from_date = firstDay(forDate);
-          params.to_date = lastDay(forDate);
-        }
         const { data } = await apiClient.get<ExpenseListResponse>('/expense/list', { params });
         setPage(data.pagination.page);
         setTotal(data.pagination.total);
@@ -122,40 +78,20 @@ export function TransactionsScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Month picker ─────────────────────────────────────────────────────────────
-  const openPicker = (): void => {
-    setTempDate(selectedDate ?? today);
-    setPickerVisible(true);
-  };
-
-  const confirmPicker = (): void => {
-    setSelectedDate(tempDate);
-    setActiveCategory('All');
-    setPickerVisible(false);
-    void fetchTransactions(1, true, tempDate);
-  };
-
-  const cancelPicker = (): void => setPickerVisible(false);
-
-  const clearMonthFilter = (): void => {
-    setSelectedDate(null);
-    setActiveCategory('All');
-    void fetchTransactions(1, true, null);
-  };
-
+  // ── Month navigation ──────────────────────────────────────────────────────────
   const navigateMonth = (dir: -1 | 1): void => {
-    const base = selectedDate ?? today;
-    const next = new Date(base);
+    const next = new Date(selectedDate);
     next.setMonth(next.getMonth() + dir);
     setSelectedDate(next);
     setActiveCategory('All');
     void fetchTransactions(1, true, next);
   };
 
-  // ── Category chip (client-side filter on loaded data) ─────────────────────────
-  const selectCategory = (cat: string): void => {
-    setActiveCategory(cat);
-  };
+  // ── Category chips (client-side filter) ──────────────────────────────────────
+  const categories = React.useMemo(() => {
+    const unique = Array.from(new Set(transactions.map(t => t.category))).sort();
+    return ['All', ...unique];
+  }, [transactions]);
 
   const displayedTransactions = React.useMemo(() => {
     if (activeCategory === 'All') { return transactions; }
@@ -164,7 +100,7 @@ export function TransactionsScreen(): React.JSX.Element {
     );
   }, [transactions, activeCategory]);
 
-  // ── Load more ────────────────────────────────────────────────────────────────
+  // ── Load more ─────────────────────────────────────────────────────────────────
   const canLoadMore = transactions.length < total;
 
   const onLoadMore = (): void => {
@@ -172,38 +108,33 @@ export function TransactionsScreen(): React.JSX.Element {
     void fetchTransactions(page + 1, false);
   };
 
-  // ── Edit ─────────────────────────────────────────────────────────────────────
+  // ── Edit ──────────────────────────────────────────────────────────────────────
   const openEdit = (item: ExpenseListItem): void => {
     setEditingItem(item);
-    setEditAmount(String(item.amount));
-    setEditCategory(item.category);
-    setEditItem(item.item);
-    setEditDate(item.expense_date);
     setEditError(null);
-    setEditModalVisible(true);
   };
 
   const closeEdit = (): void => {
-    setEditModalVisible(false);
     setEditingItem(null);
     setEditError(null);
   };
 
-  const saveEdit = async (): Promise<void> => {
+  const saveEdit = async (values: EditFormValues): Promise<void> => {
     if (!editingItem) { return; }
-    if (!editAmount.trim() || !editCategory.trim() || !editItem.trim() || !editDate.trim()) {
+    const { amount, item, category, date } = values;
+    if (!amount.trim() || !category.trim() || !item.trim() || !date.trim()) {
       setEditError('All fields are required');
       return;
     }
-    setEditLoading(true);
+    setEditSaving(true);
     setEditError(null);
     try {
       await apiClient.put(`/expense/${editingItem.id}`, {
-        amount: Number(editAmount),
+        amount: Number(amount),
         currency: editingItem.currency ?? 'INR',
-        category: editCategory.trim(),
-        item: editItem.trim(),
-        expense_date: editDate.trim(),
+        category: category.trim(),
+        item: item.trim(),
+        expense_date: date.trim(),
         notes: editingItem.notes ?? null,
         source: editingItem.source,
         raw_transcript: editingItem.raw_transcript ?? null,
@@ -213,26 +144,11 @@ export function TransactionsScreen(): React.JSX.Element {
     } catch (err) {
       setEditError(getApiErrorMessage(err));
     } finally {
-      setEditLoading(false);
+      setEditSaving(false);
     }
   };
 
   // ── Delete ────────────────────────────────────────────────────────────────────
-  const confirmDelete = (item: ExpenseListItem): void => {
-    Alert.alert(
-      'Delete Transaction',
-      `Delete "${item.item}" (₹ ${item.amount})?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => void doDelete(item),
-        },
-      ]
-    );
-  };
-
   const doDelete = async (item: ExpenseListItem): Promise<void> => {
     setActionLoadingId(item.id);
     try {
@@ -245,101 +161,50 @@ export function TransactionsScreen(): React.JSX.Element {
     }
   };
 
-  // ── Render row ────────────────────────────────────────────────────────────────
-  const renderItem = ({ item }: { item: ExpenseListItem }): React.JSX.Element => {
-    const isDeleting = actionLoadingId === item.id;
-    return (
-      <TouchableOpacity
-        style={styles.row}
-        onPress={() => openEdit(item)}
-        activeOpacity={0.7}
-        disabled={isDeleting}>
-        <View style={styles.rowLeft}>
-          <Text style={styles.rowItem} numberOfLines={1}>{item.item}</Text>
-          <Text style={styles.rowMeta}>{item.category}  ·  {item.expense_date}</Text>
-        </View>
-        <View style={styles.rowRight}>
-          <Text style={styles.rowAmount}>₹ {item.amount}</Text>
-          {isDeleting ? (
-            <ActivityIndicator size="small" color="#6C63FF" style={styles.deletingIndicator} />
-          ) : (
-            <TouchableOpacity
-              onPress={() => confirmDelete(item)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.deleteIcon}>🗑</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </TouchableOpacity>
+  const handleDelete = (item: ExpenseListItem): void => {
+    Alert.alert(
+      'Delete Transaction',
+      `Delete "${item.item}" (₹ ${item.amount})?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void doDelete(item) },
+      ]
     );
   };
 
-  // ── Main render ───────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────
+  const renderItem = ({ item }: { item: ExpenseListItem }): React.JSX.Element => (
+    <TransactionRow
+      item={item}
+      isDeleting={actionLoadingId === item.id}
+      onPress={openEdit}
+      onDelete={handleDelete}
+    />
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      <MonthNavigator date={selectedDate} onNavigate={navigateMonth} />
 
-      {/* Month navigator */}
-      <View style={styles.monthNav}>
-        <TouchableOpacity
-          onPress={() => navigateMonth(-1)}
-          style={styles.navBtn}
-          disabled={!selectedDate}>
-          <Text style={[styles.navArrow, !selectedDate && styles.navArrowDisabled]}>‹</Text>
-        </TouchableOpacity>
-        <Pressable onPress={openPicker} style={styles.monthPill}>
-          <Text style={styles.monthPillText}>
-            {selectedDate ? `📅  ${monthLabel(selectedDate)}` : '📋  All Time'}
-          </Text>
-        </Pressable>
-        <TouchableOpacity
-          onPress={selectedDate ? () => navigateMonth(1) : undefined}
-          style={styles.navBtn}>
-          {selectedDate ? (
-            <Text style={styles.navArrow}>›</Text>
-          ) : (
-            <View style={styles.navPlaceholder} />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Active month filter badge */}
-      {selectedDate ? (
-        <TouchableOpacity style={styles.clearFilter} onPress={clearMonthFilter}>
-          <Text style={styles.clearFilterText}>✕  Clear month filter</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {/* Summary strip */}
       <View style={styles.summaryStrip}>
         <Text style={styles.summaryText}>
-          {isLoading ? '—' : `${total} transaction${total !== 1 ? 's' : ''}${activeCategory !== 'All' ? ` · filtered by ${activeCategory}` : ''}`}
+          {isLoading
+            ? '—'
+            : `${total} transaction${total !== 1 ? 's' : ''}${activeCategory !== 'All' ? ` · ${activeCategory}` : ''}`}
         </Text>
       </View>
 
-      {/* Category chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipsRow}>
-        {CATEGORIES.map(cat => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.chip, activeCategory === cat && styles.chipActive]}
-            onPress={() => selectCategory(cat)}>
-            <Text style={[styles.chipText, activeCategory === cat && styles.chipTextActive]}>
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <CategoryChips
+        categories={categories}
+        active={activeCategory}
+        onSelect={setActiveCategory}
+      />
 
-      {/* Column headers */}
       <View style={styles.colHeader}>
         <Text style={styles.colHeaderText}>Note</Text>
         <Text style={styles.colHeaderText}>Amount</Text>
       </View>
 
-      {/* List */}
       {isLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#6C63FF" />
@@ -348,7 +213,9 @@ export function TransactionsScreen(): React.JSX.Element {
       ) : error ? (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={() => void fetchTransactions(1, true)} style={styles.retryBtn}>
+          <TouchableOpacity
+            onPress={() => void fetchTransactions(1, true)}
+            style={styles.retryBtn}>
             <Text style={styles.retryBtnText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -357,9 +224,7 @@ export function TransactionsScreen(): React.JSX.Element {
           <Text style={styles.emptyText}>
             {activeCategory !== 'All'
               ? `No "${activeCategory}" transactions found`
-              : selectedDate
-              ? `No transactions in ${monthLabel(selectedDate)}`
-              : 'No transactions yet'}
+              : `No transactions in ${monthLabel(selectedDate)}`}
           </Text>
         </View>
       ) : (
@@ -381,153 +246,20 @@ export function TransactionsScreen(): React.JSX.Element {
         />
       )}
 
-      {/* Month picker modal */}
-      <Modal
-        visible={pickerVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={cancelPicker}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select Month</Text>
-            <DateTimePicker
-              value={tempDate}
-              mode="date"
-              display="spinner"
-              onChange={(event, date) => {
-                if (event.type === 'set' && date) { setTempDate(date); }
-              }}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity onPress={cancelPicker} style={[styles.modalBtn, styles.cancelBtn]}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={confirmPicker} style={[styles.modalBtn, styles.confirmBtn]}>
-                <Text style={styles.confirmBtnText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Edit bottom-sheet modal */}
-      <Modal
-        visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={closeEdit}>
-        <Pressable style={styles.modalBackdrop} onPress={closeEdit}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.keyboardAvoiding}>
-            <Pressable style={styles.editCard} onPress={() => {}}>
-              <View style={styles.editHandle} />
-              <Text style={styles.editTitle}>Edit Transaction</Text>
-
-              {editError ? <Text style={styles.editError}>{editError}</Text> : null}
-
-              <View style={styles.editField}>
-                <Text style={styles.editLabel}>AMOUNT (₹)</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={editAmount}
-                  onChangeText={setEditAmount}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor="#aaa"
-                />
-              </View>
-              <View style={styles.editField}>
-                <Text style={styles.editLabel}>ITEM</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={editItem}
-                  onChangeText={setEditItem}
-                  placeholder="What was it?"
-                  placeholderTextColor="#aaa"
-                />
-              </View>
-              <View style={styles.editField}>
-                <Text style={styles.editLabel}>CATEGORY</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={editCategory}
-                  onChangeText={setEditCategory}
-                  placeholder="Category"
-                  placeholderTextColor="#aaa"
-                />
-              </View>
-              <View style={styles.editField}>
-                <Text style={styles.editLabel}>DATE</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={editDate}
-                  onChangeText={setEditDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#aaa"
-                />
-              </View>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity onPress={closeEdit} style={[styles.modalBtn, styles.cancelBtn]}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => void saveEdit()}
-                  style={[styles.modalBtn, styles.confirmBtn, editLoading && styles.btnDisabled]}
-                  disabled={editLoading}>
-                  {editLoading
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.confirmBtnText}>Save</Text>}
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
-
+      <EditTransactionModal
+        visible={editingItem !== null}
+        expense={editingItem}
+        isSaving={editSaving}
+        error={editError}
+        onClose={closeEdit}
+        onSave={saveEdit}
+      />
     </SafeAreaView>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F7F8FC' },
-
-  // Month navigator
-  monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
-  },
-  navBtn: { padding: 8 },
-  navArrow: { fontSize: 28, color: '#6C63FF', fontWeight: '300' },
-  navArrowDisabled: { color: '#ccc' },
-  clearFilter: {
-    alignSelf: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: '#FFF0F0',
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  clearFilterText: { fontSize: 12, color: '#b71c1c', fontWeight: '500' },
-  monthPill: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: '#F0EEFF',
-    borderRadius: 20,
-    paddingVertical: 8,
-    marginHorizontal: 8,
-  },
-  monthPillText: { fontSize: 15, fontWeight: '600', color: '#6C63FF' },
-
-  // Summary
   summaryStrip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -536,27 +268,6 @@ const styles = StyleSheet.create({
     borderBottomColor: '#EFEFEF',
   },
   summaryText: { fontSize: 13, color: '#888', fontWeight: '500' },
-
-  // Chips
-  chipsRow: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F0EEFF',
-  },
-  chipActive: { backgroundColor: '#6C63FF' },
-  chipText: { fontSize: 13, color: '#6C63FF', fontWeight: '500' },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
-
-  // Column header
   colHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -564,33 +275,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: '#F7F8FC',
   },
-  colHeaderText: { fontSize: 11, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  // List
+  colHeaderText: {
+    fontSize: 11,
+    color: '#aaa',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   listContent: { paddingBottom: 32 },
   separator: { height: 1, backgroundColor: '#F0F0F5', marginHorizontal: 16 },
   loadMoreIndicator: { paddingVertical: 16 },
-  deletingIndicator: { marginTop: 4 },
-  navPlaceholder: { width: 28 },
-  keyboardAvoiding: { width: '100%' },
-
-  // Row
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#fff',
-  },
-  rowLeft: { flex: 1, marginRight: 12 },
-  rowItem: { fontSize: 15, fontWeight: '600', color: '#1A1A2E', marginBottom: 3 },
-  rowMeta: { fontSize: 12, color: '#999' },
-  rowRight: { alignItems: 'flex-end', gap: 4 },
-  rowAmount: { fontSize: 15, fontWeight: '700', color: '#6C63FF' },
-  deleteIcon: { fontSize: 14, opacity: 0.4 },
-
-  // States
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: '#888', fontSize: 14 },
   errorText: { color: '#b71c1c', fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
@@ -598,64 +292,4 @@ const styles = StyleSheet.create({
   retryBtnText: { color: '#fff', fontWeight: '600' },
   emptyText: { color: '#aaa', fontSize: 14 },
   endText: { textAlign: 'center', color: '#ccc', fontSize: 12, paddingVertical: 16 },
-
-  // Shared modal
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
-    color: '#1A1A2E',
-  },
-  modalActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  cancelBtn: { backgroundColor: '#F0F0F5' },
-  cancelBtnText: { color: '#666', fontWeight: '600' },
-  confirmBtn: { backgroundColor: '#6C63FF' },
-  confirmBtnText: { color: '#fff', fontWeight: '700' },
-  btnDisabled: { opacity: 0.6 },
-
-  // Edit modal
-  editCard: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    gap: 12,
-  },
-  editHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  editTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A2E', textAlign: 'center' },
-  editError: { color: '#b71c1c', fontSize: 13, textAlign: 'center' },
-  editField: { gap: 4 },
-  editLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  editInput: {
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 15,
-    color: '#1A1A2E',
-    backgroundColor: '#FAFAFA',
-  },
 });
