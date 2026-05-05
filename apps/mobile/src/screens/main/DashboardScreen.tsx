@@ -1,4 +1,5 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -43,6 +44,7 @@ function dateToMonthParam(date: Date): string {
 }
 
 export function DashboardScreen(): React.JSX.Element {
+  const navigation = useNavigation();
   const today = new Date();
 
   // ── State ─────────────────────────────────────────────────────────────────────
@@ -210,6 +212,18 @@ export function DashboardScreen(): React.JSX.Element {
               ))
             )}
           </View>
+
+          {/* Budget shortcut */}
+          <TouchableOpacity
+            style={styles.section}
+            onPress={() => navigation.navigate('Budget' as never)}
+            activeOpacity={0.8}>
+            <Text style={styles.sectionTitle}>Budget</Text>
+            <Text style={styles.budgetCardSubtitle}>
+              Set monthly spending limits by category
+            </Text>
+            <Text style={styles.budgetCardCta}>Manage budgets →</Text>
+          </TouchableOpacity>
         </ScrollView>
       )}
     </SafeAreaView>

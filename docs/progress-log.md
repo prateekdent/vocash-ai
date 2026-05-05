@@ -79,8 +79,53 @@
 **ScrollView fix:**
 - Added `style={{ flex: 1 }}` (`scrollView` style) to the `ScrollView` so it is properly height-constrained and scrolling works.
 
+---
+
+## 2026-05-04 (continued)
+
+### Completed — Budget UI (Phase 3)
+
+**Navigation change:**
+- Introduced `MainStackNavigator` (NativeStack) wrapping the existing bottom tabs as a `Tabs` screen, with `Budget` as a sibling stack screen.
+- `RootNavigator` updated to reference `MainStackNavigator`; bottom tab count unchanged at 4.
+- `MainStackParamList` added to `navigation/types.ts` using `NavigatorScreenParams<MainTabParamList>` for typed nested navigation.
+
+**Budget entry on Dashboard:**
+- Section card appended at the bottom of `DashboardScreen`'s scroll: "Budget — Set monthly spending limits by category — Manage budgets →".
+- Tapping navigates to `Budget` screen via `useNavigation()`.
+
+**Budget screen (`BudgetScreen.tsx` + `BudgetScreen.styles.ts`):**
+- Reads `user.is_pro` from `AuthContext` immediately; if free user renders `ProPaywall` with no API calls made.
+- Pro users see `MonthNavigator` + a single card with all 10 spending categories.
+- Fetches `GET /budget/status?month=YYYY-MM`; merges results with full `BUDGET_CATEGORIES` list so all 10 rows are always visible.
+- Month navigation follows the same pattern as Transactions and Dashboard screens.
+
+**`BudgetCategoryRow` component:**
+- Colored category dot (reuses `getCategoryColor`), category name, chevron.
+- If limit is set: fixed-height progress bar (`#F0F0F5` track, colored fill), spent/limit label, remaining or "Over by ₹X" label.
+- Progress bar colors: green (< 90% spent), amber (90–99%), red (≥ 100%).
+- If limit is unset: "Set limit" CTA in purple.
+
+**`SetBudgetModal` component:**
+- Bottom-sheet modal mirroring `EditTransactionModal` (slide animation, handle, backdrop dismiss, `KeyboardAvoidingView`).
+- Pre-populates limit amount if one is already set for the category.
+- Validates input (positive non-NaN number) before calling `POST /budget/set`.
+- On success: closes modal and refreshes status.
+
+**Pro paywall:**
+- Three feature bullets, large ₹ badge icon, "Upgrade to Pro" button.
+- Button navigates to Profile tab via `navigation.navigate('Tabs', { screen: 'Profile' })` — destination is the existing ProfileScreen (full payment flow deferred to Phase 4).
+
+**New types (`types/api.ts`):**
+- `BudgetStatusItem`, `BudgetStatusResponse`, `BudgetSetRequest` added.
+
+**Doc fix (`docs/api-contracts.md`):**
+- Corrected budget endpoint example category from `"Food & Dining"` (invalid) to `"Food"`.
+- Added Pro-gating (`403 PRO_REQUIRED`) notes to both `/budget/set` and `/budget/status`.
+- Added note explaining category string constraint and its impact on spend rollup.
+
 ### Open Items
 - Category normalization: AI extracts free-text categories (`groceries`, `petrol`) that do not match chip labels (`Food`, `Transport`). Fix: normalize at extraction time in the backend prompt — tracked as a separate future slice.
 - Search and category drill-down (Phase 3).
-- Budget UI (connects to existing backend endpoints).
+- `is_pro` freshness: upgrading mid-session requires re-login to unlock Budget UI — to be resolved in Phase 4 payment flow (re-hydrate user after Razorpay verification).
 - Phase 4: Razorpay upgrade UX, limit-hit paywall, App Store submission.

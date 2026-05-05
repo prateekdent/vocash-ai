@@ -11,56 +11,42 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import type { ExpenseListItem } from '../../types/api';
-
-export type EditFormValues = {
-  amount: string;
-  item: string;
-  category: string;
-  date: string;
-};
 
 type Props = {
   visible: boolean;
-  expense: ExpenseListItem | null;
+  category: string;
+  currentLimit: number;
   isSaving: boolean;
-  isDeleting: boolean;
   error: string | null;
   onClose: () => void;
-  onSave: (values: EditFormValues) => Promise<void>;
-  onDelete: () => void;
+  onSave: (limitAmount: number) => Promise<void>;
 };
 
 // Prevents tap-through to the backdrop without an inline arrow function.
 function stopEvent(): void { /* intentional noop */ }
 
-export function EditTransactionModal({
+export function SetBudgetModal({
   visible,
-  expense,
+  category,
+  currentLimit,
   isSaving,
-  isDeleting,
   error,
   onClose,
   onSave,
-  onDelete,
 }: Props): React.JSX.Element {
   const [amount, setAmount] = React.useState('');
-  const [item, setItem] = React.useState('');
-  const [category, setCategory] = React.useState('');
-  const [date, setDate] = React.useState('');
 
-  // Re-populate form whenever the expense being edited changes.
+  // Re-populate the field whenever the modal opens or target category changes.
   React.useEffect(() => {
-    if (expense) {
-      setAmount(String(expense.amount));
-      setItem(expense.item);
-      setCategory(expense.category);
-      setDate(expense.expense_date);
+    if (visible) {
+      setAmount(currentLimit > 0 ? String(currentLimit) : '');
     }
-  }, [expense]);
+  }, [visible, currentLimit]);
 
   const handleSave = (): void => {
-    void onSave({ amount, item, category, date });
+    const parsed = Number(amount.trim());
+    if (!amount.trim() || isNaN(parsed) || parsed <= 0) { return; }
+    void onSave(parsed);
   };
 
   return (
@@ -75,75 +61,39 @@ export function EditTransactionModal({
           style={styles.avoider}>
           <Pressable style={styles.card} onPress={stopEvent}>
             <View style={styles.handle} />
-            <Text style={styles.title}>Edit Transaction</Text>
+            <Text style={styles.title}>Set Monthly Limit</Text>
+            <Text style={styles.subtitle}>{category}</Text>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <View style={styles.field}>
-              <Text style={styles.label}>AMOUNT (₹)</Text>
+              <Text style={styles.label}>LIMIT AMOUNT (₹)</Text>
               <TextInput
                 style={styles.input}
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="numeric"
-                placeholder="0"
+                placeholder="e.g. 5000"
                 placeholderTextColor="#aaa"
-              />
-            </View>
-            <View style={styles.field}>
-              <Text style={styles.label}>ITEM</Text>
-              <TextInput
-                style={styles.input}
-                value={item}
-                onChangeText={setItem}
-                placeholder="What was it?"
-                placeholderTextColor="#aaa"
-              />
-            </View>
-            <View style={styles.field}>
-              <Text style={styles.label}>CATEGORY</Text>
-              <TextInput
-                style={styles.input}
-                value={category}
-                onChangeText={setCategory}
-                placeholder="Category"
-                placeholderTextColor="#aaa"
-              />
-            </View>
-            <View style={styles.field}>
-              <Text style={styles.label}>DATE</Text>
-              <TextInput
-                style={styles.input}
-                value={date}
-                onChangeText={setDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#aaa"
+                autoFocus
               />
             </View>
 
             <View style={styles.actions}>
-              <TouchableOpacity onPress={onClose} style={[styles.btn, styles.cancelBtn]}>
+              <TouchableOpacity
+                onPress={onClose}
+                style={[styles.btn, styles.cancelBtn]}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleSave}
                 style={[styles.btn, styles.confirmBtn, isSaving && styles.btnDisabled]}
-                disabled={isSaving || isDeleting}>
+                disabled={isSaving}>
                 {isSaving
                   ? <ActivityIndicator color="#fff" />
                   : <Text style={styles.confirmText}>Save</Text>}
               </TouchableOpacity>
             </View>
-
-            <View style={styles.deleteDivider} />
-            <TouchableOpacity
-              onPress={onDelete}
-              style={[styles.deleteBtn, (isSaving || isDeleting) && styles.btnDisabled]}
-              disabled={isSaving || isDeleting}>
-              {isDeleting
-                ? <ActivityIndicator color="#E53935" size="small" />
-                : <Text style={styles.deleteText}>Delete Transaction</Text>}
-            </TouchableOpacity>
           </Pressable>
         </KeyboardAvoidingView>
       </Pressable>
@@ -175,6 +125,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: { fontSize: 18, fontWeight: '700', color: '#1A1A2E', textAlign: 'center' },
+  subtitle: { fontSize: 14, color: '#888', textAlign: 'center', marginTop: -4 },
   errorText: { color: '#b71c1c', fontSize: 13, textAlign: 'center' },
   field: { gap: 4 },
   label: {
@@ -201,18 +152,4 @@ const styles = StyleSheet.create({
   confirmBtn: { backgroundColor: '#6C63FF' },
   confirmText: { color: '#fff', fontWeight: '700' },
   btnDisabled: { opacity: 0.6 },
-  deleteDivider: {
-    height: 1,
-    backgroundColor: '#F5F5F5',
-    marginTop: 4,
-  },
-  deleteBtn: {
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  deleteText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#E53935',
-  },
 });

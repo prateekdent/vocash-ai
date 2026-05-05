@@ -26,14 +26,13 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-	  <!-- Do not change NSAllowsArbitraryLoads to true, or you will risk app rejection! -->
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>Required for app functionality</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Vocash needs microphone access to record your voice expense.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

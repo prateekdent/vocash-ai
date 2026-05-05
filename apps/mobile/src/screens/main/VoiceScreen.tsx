@@ -2,7 +2,9 @@ import Voice, {
   SpeechErrorEvent,
   SpeechResultsEvent,
 } from '@react-native-voice/voice';
+import { useNavigation } from '@react-navigation/native';
 import React from 'react';
+import { STT_LOCALE } from '../../config/voiceConfig';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -30,6 +32,7 @@ type ExtractedExpense = {
 };
 
 export function VoiceScreen(): React.JSX.Element {
+  const navigation = useNavigation();
   const [voiceState, setVoiceState] = React.useState<VoiceState>('idle');
   const [transcript, setTranscript] = React.useState('');
   const [partialTranscript, setPartialTranscript] = React.useState('');
@@ -87,7 +90,7 @@ export function VoiceScreen(): React.JSX.Element {
     setTranscript('');
     setPartialTranscript('');
     try {
-      await Voice.start('hi-IN'); // Hindi-India; falls back to English naturally
+      await Voice.start(STT_LOCALE);
       setVoiceState('recording');
     } catch (e) {
       setError(getApiErrorMessage(e));
@@ -148,7 +151,13 @@ export function VoiceScreen(): React.JSX.Element {
       });
       setSuccess('Expense saved!');
       await fetchUsage();
-      setTimeout(() => reset(), 800);
+      setTimeout(() => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          reset();
+        }
+      }, 800);
     } catch (e) {
       setError(getApiErrorMessage(e));
     } finally {

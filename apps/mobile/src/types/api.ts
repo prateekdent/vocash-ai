@@ -37,6 +37,24 @@ export type ExpenseExtractResponse = {
   raw_transcript: string;
 };
 
+export type BudgetStatusItem = {
+  category: string;
+  limit_amount: number;
+  spent_amount: number;
+  remaining: number;
+};
+
+export type BudgetStatusResponse = {
+  month: string;
+  items: BudgetStatusItem[];
+};
+
+export type BudgetSetRequest = {
+  month: string;
+  category: string;
+  limit_amount: number;
+};
+
 export type DashboardSummaryResponse = {
   month: string;
   total_spend: number | string;

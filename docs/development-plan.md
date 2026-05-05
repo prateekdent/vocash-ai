@@ -48,7 +48,15 @@ Sequence:
    - MonthNavigator reused with optional onPillPress; top-5 + Others rollup logic.
 3. Category normalization at extraction time (backend prompt update). - Pending
 4. Search and category drill-down. - Pending
-5. Budget UI (connects to existing `/budget/set` and `/budget/status`). - Pending
+5. Budget UI (connects to existing `/budget/set` and `/budget/status`). - Completed (2026-05-04)
+   - `MainStackNavigator` wraps bottom tabs + Budget as a sibling stack screen; no new tab added.
+   - Budget entry: section card at the bottom of Dashboard scroll.
+   - Pro gate: `ProPaywall` shown immediately for free users; "Upgrade to Pro" navigates to Profile tab.
+   - All 10 `ALLOWED_CATEGORIES` shown as rows; unset rows show "Set limit" CTA.
+   - `BudgetCategoryRow`: colored dot, progress bar (green/amber/red), spent/limit/remaining.
+   - `SetBudgetModal`: bottom-sheet (mirrors EditTransactionModal), pre-fills existing limit.
+   - Category strings sourced from `TRANSACTION_CATEGORIES` (same source as backend `ALLOWED_CATEGORIES`) — guarantees spend rollup accuracy.
+   - `docs/api-contracts.md` updated: fixed category example, added Pro gating notes.
 
 ## Phase 4 - Monetization & Release (Week 6)
 Goal: Paid conversion and store readiness.

@@ -139,19 +139,28 @@ Notes:
 - On success, backend marks the authenticated user as Pro and updates `pro_valid_until`.
 
 ### POST `/budget/set`
+Auth: Required (Bearer JWT). Pro users only — non-Pro returns `403 PRO_REQUIRED`.
 Request:
 ```json
-{ "month": "2026-04", "category": "Food & Dining", "limit_amount": 6000 }
+{ "month": "2026-04", "category": "Food", "limit_amount": 6000 }
 ```
 Response 200: `{ "saved": true }`
+Notes:
+- `category` must be one of the 10 values in `ALLOWED_CATEGORIES` (see `extraction_service.py`).
+  Using any other string results in `spent_amount` always showing 0 in `/budget/status`,
+  because the spend rollup matches category strings exactly against stored expenses.
 
 ### GET `/budget/status?month=2026-04`
+Auth: Required (Bearer JWT). Pro users only — non-Pro returns `403 PRO_REQUIRED`.
 Response 200:
 ```json
 {
   "month": "2026-04",
   "items": [
-    { "category": "Food & Dining", "limit_amount": 6000, "spent_amount": 4200, "remaining": 1800 }
+    { "category": "Food", "limit_amount": 6000, "spent_amount": 4200, "remaining": 1800 }
   ]
 }
 ```
+Notes:
+- Only returns categories that have a limit set; categories without a limit are absent from `items`.
+- `remaining` can be negative when `spent_amount` exceeds `limit_amount`.

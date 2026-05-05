@@ -60,5 +60,7 @@ export const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A2E' },
   empty: { color: '#aaa', fontSize: 13 },
+  budgetCardSubtitle: { fontSize: 13, color: '#888', marginTop: 2 },
+  budgetCardCta: { fontSize: 13, color: '#6C63FF', fontWeight: '600', marginTop: 6 },
 
 });
